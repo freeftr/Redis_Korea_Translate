@@ -204,12 +204,12 @@ OK
 ```redis
 > RPUSH bikes:repairs bike:1 bike:2 bike:3 bike:4 bike:5
 (integer) 5
-> LTRIM bikes:repairs 0 2
+> LTRIM bikes:repairs -3 -1
 OK
 > LRANGE bikes:repairs 0 -1
-1) "bike:1"
-2) "bike:2"
-3) "bike:3"
+1) "bike:3"
+2) "bike:4"
+3) "bike:5"
 ```
 
 위의 조합은 3개의 최신 요소들만을 유지시켜주는 동시에 새로운 요소를 넣을 수 있게 해줍니다.
