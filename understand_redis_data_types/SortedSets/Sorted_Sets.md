@@ -1,12 +1,11 @@
 # Redis sorted sets
 
 Redis Sorted Set은 고유한 연관된 점수에 따라 고유한 문자열들이 정렬된 상태로 저장하는
-집합입니다. 만약 연관된 점수가 같은 문자열들이 존재하면, 사전순으로 정렬하게 됩니다.
-Sorted sets의 주요 활용 사례는 다음과 같습니다:
+집합입니다. 만약 연관된 점수가 같은 문자열이 존재할 경우, 사전순으로 정렬됩니다.Sorted sets의 주요 활용 사례는 다음과 같습니다:
 - 리더보드: 대규모 온라인 게임같은 상황에서 점수에 따라 순위표를 Sorted Set으로 간단히 구현할 수 있습니다.
 - Rate Limiters: 너무 많은 API 요청을 제한하기 위한 슬라이딩 윈도우 기반 요율 제한기를 Sorted Set으로 간단히 구현할 수 있습니다.
 
-Sorted Set이 Set과 Hash의 중간 형태라고 생각하실 수 있습니다. Sorted Set은 Set처럼
+Sorted Set은 Set과 Hash의 중간 형태로 볼 수 있습니다. Sorted Set은 Set처럼
 고유하고 중복되지 않는 문자열 요소들로 구성되어 있기 때문에, 어떤 면에서는 Set과 공통됩니다.
 
 하지만 Set에서는 요소들이 정렬된 상태로 저장되어 있지 않지만, Sorted Set에서는 모든 요소가
@@ -108,7 +107,7 @@ Sorted Set의 기능은 여기서 끝이 아닙니다. Sorted Set은 범위를 �
 **ZREMRANGEBYSCORE** 명령어는 이름은 좀 그렇지만 매우 유용한 명령어입니다.**ZREMRANGEBYSCORE** 명령어는
 제거된 요소의 개수도 반환합니다.
 
-Sorted Set의 매우 유용한 명령어중에는 순위를 조회하는 명령어도 있습니다. 정렬된 집합에내에서 몇 번째 위치에 있는지
+Sorted Set의 매우 유용한 명령어 중에는 순위를 조회하는 명령어도 있습니다. 정렬된 집합 내에서 몇 번째 위치에 있는지
 조회할 수 있습니다. **ZREVRANK** 명령어를 통해 내림차순에서의 위치도 조회할 수 있습니다.
 
 ~~~redis
@@ -151,3 +150,63 @@ Redis 2.8 버전에서는 집합에 점수가 같은 모든 요소들이 들어�
 요소들을 동일한 점수로 정렬된 집합에 추가하되, 각 요소의 앞에 16바이트로 구성된 128비트 big-endian 숫자를 접두사로 붙여 저장하면 됩니다.
 big-endian 방식으로 저장된 숫자는 바이트 순서대로 사전순 정렬하면 곧 숫자 정렬과 동일한 순서가 되므로, 정렬된 집합에서 128비트 숫자 범위로 조회할 수 있으며, 
 이때 접두사를 제외한 실제 값을 활용하면 됩니다.
+
+### Updating the score: leaderboards
+***
+
+다음 주제로 넘어가기전 Sorted Set에 대해 한 가지만 더 말씀드리자면, Sorted Set의 스코어는 언제든
+수정이 될 수 있습니다. Sorted Set에 들어있는 요소에 대해 **ZADD** 명령어를 호출하는 것만으로도
+O(log(N))으로 스코어를 수정할 수 있습니다. 따라서, Sorted Set은 대량의 수정에 적합합니다.
+
+### Examples
+***
+
+- 리더보드를 Sorted Set으로 구현하는 방법에는 두 가지가 있습니다. 선수의 최신 점수를 알고 있으면,
+**ZADD** 명령어를 통해 직접 수정할 수 있습니다. 하지만, 기존 점수에 점수를 더하고 싶으면 **ZINCRBY**
+명령어를 사용할 수 있습니다.
+~~~redis
+> ZADD racer_scores 100 "Wood"
+(integer) 1
+> ZADD racer_scores 100 "Henshaw"
+(integer) 1
+> ZADD racer_scores 150 "Henshaw"
+(integer) 0
+> ZINCRBY racer_scores 50 "Wood"
+"150"
+> ZINCRBY racer_scores 50 "Henshaw"
+"200"
+~~~
+
+**ZADD** 명령어는 기존에 요소가 이미 존재할 시 0을 반환하는 것을 볼 수 있고, **ZINCRBY** 명령어는
+새로운 점수를 반환하는 것을 볼 수 있습니다. Henshaw 선수의 점수는 처음에 100이었고, 이전 점수를 고려하지 않고 150으로 변경된 뒤,
+50이 증가하여 200이 되었습니다.
+
+### Basic commands
+***
+
+- **ZADD**는 Sorted Set에 요소-스코어 쌍을 추가합니다. 이미 요소가 존재할 시 기존의 값을 수정합니다.
+- **ZRANGE**는 Sorted Set의 요소들을 지정된 범위 내에서 정렬된 순서로 반환합니다. 
+- **ZRANK**는 인자로 받은 요소의 순위를 반환하고 오름차순을 기준으로 합니다.
+- **ZREVRANK**는 인자로 받은 요소의 순위를 반환하고 내림차순을 기준으로 합니다.
+
+Sorted Set의 전체 명령어를 확인하세요.
+
+### Performance
+***
+
+대부분의 Sorted Set 연산은 O(log(n))에서 이루어지며 n는 요소의 개수입니다.
+
+**ZRANGE** 명령어를 사용할 때는 반환되는 값의 수가 많을 경우 주의해야 합니다.
+O(log(n) + m)의 시간복잡도에서 이루어지며, m은 반환되는 값의 수입니다.
+
+### Alternatives
+***
+
+Redis Sorted Set은 종종 다른 Redis 자료형들을 인덱싱하는 데 사용되기도 합니다. 데이터를
+인덱싱하거나 쿼리해야할 일이 있다면, Json이나 Redis Query Engine 기능을 고려하세요.
+
+### Learn more
+***
+
+- **Redis Sorted Sets Explained**는 Sorted Set에 관한 소개입니다.
+- **Redis University's RU101**에서 Redis Sorted Set을 자세히 다룹니다.
